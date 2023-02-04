@@ -2,10 +2,11 @@
   hosts: all
   become: yes
   vars:
-    node_exporter_link: "https://github.com/prometheus/node_exporter/releases/download/v0.21.0/node_exporter-0.21.0.linux-amd64.tar.gz"
-    node_exporter_port: 9100
+    node_exporter_link: "https://github.com/prometheus/node_exporter/releases/download/v1.5.0/node_exporter-1.5.0.linux-amd64.tar.gz"
+    version: node_exporter-1.5.0.linux-amd64
+    node_exporter_port: 9101
     node_exporter_user: node_exporter
-    
+
   tasks:
     - name: Check if port is in use
       wait_for:
@@ -32,43 +33,38 @@
 
 
     - name: Create a symbolic link for Node Exporter
-      file:
-        src: "/usr/local/node_exporter-0.21.0.linux-amd64/node_exporter"
+      copy:
+        remote_src: true
+        src: "/usr/local/{{ version }}/node_exporter"
         dest: "/usr/local/bin/node_exporter"
-        state: link
 
     - name: Create node_exporter user
       user:
         name: "{{ node_exporter_user }}"
         state: present
 
+    - name: copy file between locations on the remote host
+      copy:
+        src: ./node_exporter.service
+        dest: /etc/systemd/system/
 
-    - name: Create Systemd service for Node Exporter  
-      become: yes      
-      copy:     
-        src: node_exporter.service  
-        dest: /etc/systemd/system/node_exporter.service   
-      notify: 
-      - reload systemctl
-      
-      
-    - name: Start Node Exporter as Systemd service
-      become: yes
-      systemctl:
+
+
+    - name: Enable the service
+      systemd:
+        name: node_exporter
+        state: started
+        enabled: yes
+
+    - name: Start the service
+      systemd:
         name: node_exporter
         state: started
 
-    - name: Check status of Node Exporter
-      shell: netstat -tlpn | grep ":{{ node_exporter_port }}"
-      register: node_exporter_status
+    - name: Show status of the service
+      command: systemctl status node_exporter
+      register: service_status
 
-    - name: Display status of Node Exporter
+    - name: Display the result
       debug:
-        var: node_exporter_status.stdout_lines
-
-  handlers:
-   - name: reload systemctl
-     become: yes
-     systemctl:
-       name: daemon-reload
-       state: started
+        var: service_status.stdout_lines
